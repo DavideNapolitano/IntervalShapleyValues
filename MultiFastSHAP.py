@@ -239,9 +239,9 @@ class MultiFastSHAP:
         else:
             raise ValueError('train_data must be np.ndarray, torch.Tensor or Dataset')
 
-        grand_train1, grand_train2 = calculate_grand_coalition(train_set, imputer, batch_size * num_samples, link, device, num_workers, debug=False).cpu()
+        grand_train1, grand_train2 = calculate_grand_coalition(train_set, imputer, batch_size * num_samples, link, device, num_workers, debug=False)
 
-        grand_val1, grand_val2 = calculate_grand_coalition(val_set, imputer, batch_size * num_samples, link, device, num_workers, debug=False).cpu()
+        grand_val1, grand_val2 = calculate_grand_coalition(val_set, imputer, batch_size * num_samples, link, device, num_workers, debug=False)
 
         # Null coalition.
         with torch.no_grad():
@@ -256,6 +256,7 @@ class MultiFastSHAP:
             if len(null2.shape) == 1:
                 null2 = null2.reshape(1, 1)
         self.null1 = null1
+        self.null2 = null2
         if debug:
             print("NULL:", null1.shape, null1)
 
@@ -291,7 +292,7 @@ class MultiFastSHAP:
 
             if bar:
                 batch_iter = tqdm(train_loader, desc='Training epoch')
-            else:ó
+            else:
                 batch_iter = train_loader
 
             for iter, v2 in enumerate(batch_iter):
@@ -420,6 +421,6 @@ class MultiFastSHAP:
 
             # Evaluate explainer.
             x = x.to(device)
-            pred = evaluate_explainer(self.explainer, self.normalization, x, grand1, grand2, self.null1, self.null2, self.imputer.num_players, inference=True)
+            pred1, pred2 = evaluate_explainer(self.explainer, self.normalization, x, grand1, grand2, self.null1, self.null2, self.imputer.num_players, inference=True)
 
-        return pred.cpu().data.numpy()
+        return pred1.cpu().data.numpy(), pred2.cpu().data.numpy()
