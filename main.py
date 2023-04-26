@@ -685,6 +685,6 @@ plt.legend(fontsize=16)
 plt.tick_params(labelsize=14)
 plt.ylabel('SHAP Values', fontsize=16)
 plt.xticks(np.arange(num_features), feature_names, rotation=35, rotation_mode='anchor', ha='right')
-#plt.savefig(f'figure/{dataset} Global Interval SV comparison', bbox_inches = "tight")
+plt.savefig(f'plots/{dataset} Global Interval SV comparison', bbox_inches = "tight")
 
 plt.show()
