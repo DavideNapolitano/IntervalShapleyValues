@@ -19,6 +19,7 @@ import os
 print(os.getcwd())
 print(torch.cuda.is_available())
 print(torch.cuda.get_device_name(0))
+print(torch.cuda.device_count())
 #%% DATASET
 X_train_s, X_val_s, X_test_s, Y_train, Y_val, Y_test, feature_names, num_features, dataset = Datasets.Monks()
 
