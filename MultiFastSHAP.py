@@ -146,17 +146,25 @@ def validate(val_loader, imputer, explainer, null1, null2, link, normalization, 
             loss1 = loss_fn(approx1, values1)
             loss2 = loss_fn(approx2, values2)
             if constraint:
-                vec1 = approx1[:, 0].unsqueeze(1)
-                vec2 = approx2[:, 1].unsqueeze(1)
-                vec3 = torch.cat((vec1, vec2), 1)
+                # vec1 = approx1[:, 0].unsqueeze(1)
+                # vec2 = approx2[:, 1].unsqueeze(1)
+                # vec3 = torch.cat((vec1, vec2), 1)
+                #
+                # vec4 = approx1[:, 1].unsqueeze(1)
+                # vec5 = approx2[:, 0].unsqueeze(1)
+                # vec6 = torch.cat((vec5, vec4), 1)
 
-                vec4 = approx1[:, 1].unsqueeze(1)
-                vec5 = approx2[:, 0].unsqueeze(1)
-                vec6 = torch.cat((vec5, vec4), 1)
+                vec1 = approx2[:,1] - approx1[:, 0]
+                vec2 = approx1[:, 1] - approx2[:, 0]
+                vec3 = torch.cat((vec1.unsqueeze(1), vec2.unsqueeze(1)), 1)
+
+                vec4 = values2[:, 1] - values1[:, 0]
+                vec5 = values1[:, 1] - values2[:, 0]
+                vec6 = torch.cat((vec5.unsqueeze(1), vec4.unsqueeze(1)), 1)
 
                 loss3 = loss_fn(vec3, vec6)
 
-                loss =  loss1 + loss2 + loss3  # + loss4)
+                loss =  loss1 + loss2 + loss3
             else:
                 loss = loss1 + loss2
 
@@ -384,13 +392,23 @@ class MultiFastSHAP:
                     #loss = loss + eff_lambda * loss_fn(total, grand - null)
 
                 if constraint:
-                    vec1 = approx1[:, 0].unsqueeze(1)
-                    vec2 = approx2[:, 1].unsqueeze(1)
-                    vec3 = torch.cat((vec1, vec2), 1)
+                    # vec1 = approx1[:, 0].unsqueeze(1)
+                    # vec2 = approx2[:, 1].unsqueeze(1)
+                    # vec3 = torch.cat((vec1, vec2), 1)
+                    #
+                    # vec4 = approx1[:, 1].unsqueeze(1)
+                    # vec5 = approx2[:, 0].unsqueeze(1)
+                    # vec6 = torch.cat((vec5, vec4), 1)
+                    #
+                    # loss3 = loss_fn(vec3, vec6)
 
-                    vec4 = approx1[:, 1].unsqueeze(1)
-                    vec5 = approx2[:, 0].unsqueeze(1)
-                    vec6 = torch.cat((vec5, vec4), 1)
+                    vec1 = approx2[:, 1] - approx1[:, 0]
+                    vec2 = approx1[:, 1] - approx2[:, 0]
+                    vec3 = torch.cat((vec1.unsqueeze(1), vec2.unsqueeze(1)), 1)
+
+                    vec4 = values2[:, 1] - values1[:, 0]
+                    vec5 = values1[:, 1] - values2[:, 0]
+                    vec6 = torch.cat((vec5.unsqueeze(1), vec4.unsqueeze(1)), 1)
 
                     loss3 = loss_fn(vec3, vec6)
 
