@@ -53,7 +53,7 @@ def Census():
 def WBCD():
     dataset="WBCD"
     columns=["ID","Clump Thickness","Uniformity of Cell Size","Uniformity of Cell Shape","Marginal Adhesion","Single Epithelial Cell Size","Bare Nuclei","Bland Chromatin","Normal Nucleoli","Mitoses","Class"]
-    data = pd.read_csv('datasets\breast-cancer-wisconsin.data', dtype=object, delimiter=',',header=None,na_values="?")
+    data = pd.read_csv('datasets/breast-cancer-wisconsin.data', dtype=object, delimiter=',',header=None,na_values="?")
     data.columns=columns
     data=data.dropna(axis=0)
 

@@ -103,7 +103,7 @@ def generate_validation_data(val_set, imputer, validation_samples, sampler, batc
     return val_S, val_values1, val_values2
 
 
-def validate(val_loader, imputer, explainer, null1, null2, link, normalization, approx_null, debug, constraint):
+def validate(val_loader, imputer, explainer, null1, null2, link, normalization, approx_null, debug_val, constraint, alpha):
     with torch.no_grad():
         # Setup.
         device = next(explainer.parameters()).device
@@ -114,7 +114,7 @@ def validate(val_loader, imputer, explainer, null1, null2, link, normalization, 
         for x, grand1, grand2, S, values1, values2 in val_loader: #[val_set, TensorDataset(grand_val1, grand_val2, val_S, val_values1, val_values2)]
             # Move to device.
             x = x.to(device)
-            if debug:
+            if debug_val:
                 print("VALIDATION x shape", x.shape)
             S = S.to(device)
 
@@ -126,7 +126,7 @@ def validate(val_loader, imputer, explainer, null1, null2, link, normalization, 
 
             # Evaluate explainer.
             pred1, _, pred2, _ = evaluate_explainer(explainer, normalization, x, grand1, grand2, null1, null2, imputer.num_players)
-            if debug:
+            if debug_val:
                 print("VALIDATION Sbatch shape", S.shape)
                 # print("VALIDATION Sbatch",S[0])
                 print("VALIDATION pred1 shape", pred1.shape)
@@ -140,7 +140,7 @@ def validate(val_loader, imputer, explainer, null1, null2, link, normalization, 
             else:
                 approx1 = torch.matmul(S, pred1)
                 approx2 = torch.matmul(S, pred2)
-            if debug:
+            if debug_val:
                 print("VALIDATION approx shape1", approx1.shape)
                 print("VALIDATION approx shape2", approx2.shape)
             loss1 = loss_fn(approx1, values1)
@@ -164,7 +164,7 @@ def validate(val_loader, imputer, explainer, null1, null2, link, normalization, 
 
                 loss3 = loss_fn(vec3, vec6)
 
-                loss =  loss1 + loss2 + loss3
+                loss =  (1-alpha)*(loss1 + loss2) + (alpha)*(loss3)
             else:
                 loss = loss1 + loss2
 
@@ -223,7 +223,9 @@ class MultiFastSHAP:
               weight_decay=0.01,
               approx_null=True,
               debug=False,
-              constraint = False
+              debug_val=False,
+              constraint = False,
+              alpha = 0.5,
               ):
 
         # Set up explainer model.
@@ -410,9 +412,14 @@ class MultiFastSHAP:
                     vec5 = values1[:, 1] - values2[:, 0]
                     vec6 = torch.cat((vec5.unsqueeze(1), vec4.unsqueeze(1)), 1)
 
+                    if debug and epoch == 0 and iter < 5:
+                        print("VEC3", vec3.shape, vec3)
+                        print("VEC6", vec6.shape, vec6)
+
                     loss3 = loss_fn(vec3, vec6)
 
-                    loss = num_players * (loss1 + loss2 + loss3)  # + loss4)
+
+                    loss = num_players * ((1-alpha)*(loss1 + loss2) + (alpha)*(loss3))
                 else:
                     loss = num_players * (loss1 + loss2)
                 loss.backward()
@@ -421,7 +428,7 @@ class MultiFastSHAP:
 
             # Evaluate validation loss.
             explainer.eval()
-            val_loss = num_players * validate(val_loader, imputer, explainer, null1, null2, link, normalization, approx_null, debug=debug)  # .item()
+            val_loss = num_players * validate(val_loader, imputer, explainer, null1, null2, link, normalization, approx_null, debug_val=debug_val, constraint=constraint, alpha=alpha)  # .item()
             explainer.train()
 
             scheduler.step(val_loss)

@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 import os
 from MultiFastSHAP import MultiFastSHAP
 import time
+from importlib import reload
+
 
 print(os.getcwd())
 print(torch.cuda.is_available())
@@ -24,7 +26,7 @@ print(torch.cuda.get_device_name(0))
 print(torch.cuda.device_count())
 
 #%% DATASET
-X_train_s, X_val_s, X_test_s, Y_train, Y_val, Y_test, feature_names, num_features, dataset = Datasets.Monks()
+X_train_s, X_val_s, X_test_s, Y_train, Y_val, Y_test, feature_names, num_features, dataset = Datasets.WBCD()
 
 #%% ORIGINAL MODEL
 modelRF = RandomForestClassifier(random_state=0)
@@ -102,7 +104,7 @@ else:
         )
 
 #%% SAVE SURROGATE MODEL
-SAVE=False
+SAVE=True
 if SAVE:
     surr_VV.cpu()
     torch.save(surr_VV, f'models/{dataset} surrogate_VV.pt')
@@ -148,10 +150,11 @@ else:
         weight_decay=0.05,
         training_seed=SEED,
         lookback=20,
-        debug=False) ########################################à
+        debug=False,
+        ) ########################################à
 
 #%% SAVE EXPLAINER1
-SAVE=False
+SAVE=True
 if SAVE:
     explainer1.cpu()
     torch.save(explainer1, f'models/{dataset} explainer1.pt')
@@ -162,7 +165,7 @@ LOAD=False
 if LOAD and os.path.isfile(f'models/{dataset} explainer2.pt'):
     print('Loading saved explainer model')
     explainer2 = torch.load(f'models/{dataset} explainer2.pt').to(device)
-    fastshap2 = FastSHAP(explainer1, surrogate_VV, normalization='additive',link=nn.Softmax(dim=-1))
+    fastshap2 = FastSHAP(explainer2, surrogate_VV, normalization='additive',link=nn.Softmax(dim=-1))
 else:
     LAYER_SIZE=512
     explainer2 = nn.Sequential(
@@ -196,7 +199,7 @@ else:
         debug=False)
 
 #%% SAVE EXPLAINER2
-SAVE=False
+SAVE=True
 if SAVE:
     explainer2.cpu()
     torch.save(explainer2, f'models/{dataset} explainer2.pt')
@@ -226,12 +229,53 @@ class MultiTaskExplainer(nn.Module):
         return v1, v2
 
 #%% FASTSHAP 3
-explainer3 = MultiTaskExplainer(512).to(device)
 
-fastshap3 = MultiFastSHAP(explainer3, surrogate_VV, normalization="additive", link=nn.Softmax(dim=-1))
+LOAD=False
+if LOAD and os.path.isfile(f'models/{dataset} explainer3.pt'):
+    print('Loading saved explainer model')
+    explainer3 = torch.load(f'models/{dataset} explainer3.pt').to(device)
+    fastshap3 = FastSHAP(explainer3, surrogate_VV, normalization='additive',link=nn.Softmax(dim=-1))
+else:
+    explainer3 = MultiTaskExplainer(512).to(device)
 
+    fastshap3 = MultiFastSHAP(explainer3, surrogate_VV, normalization="additive", link=nn.Softmax(dim=-1))
+
+    # Train
+    fastshap3.train(
+        X_train_s,
+        X_val_s,
+        batch_size=8,
+        num_samples=8, ##############
+        max_epochs=400,#200
+        validation_samples=128,
+        verbose=True,
+        paired_sampling=True,
+        approx_null=True,
+        lr=1e-2,
+        min_lr=1e-5,
+        lr_factor=0.5,
+        weight_decay=0.05,
+        training_seed=SEED,
+        lookback=20,
+        debug=False,
+        constraint=False
+    ) ########################################à
+
+#%% SAVE EXPLAINER3
+SAVE=True
+if SAVE:
+    explainer3.cpu()
+    torch.save(explainer3, f'models/{dataset} explainer3.pt')
+    explainer3.to(device)
+
+#%%
+explainer4 = MultiTaskExplainer(512).to(device)
+
+fastshap4 = MultiFastSHAP(explainer4, surrogate_VV, normalization="additive", link=nn.Softmax(dim=-1))
+
+alpha=0.01
 # Train
-fastshap3.train(
+fastshap4.train(
     X_train_s,
     X_val_s,
     batch_size=8,
@@ -247,13 +291,18 @@ fastshap3.train(
     weight_decay=0.05,
     training_seed=SEED,
     lookback=20,
-    debug=False) ########################################à
+    debug_val=False,
+    debug=False,
+    constraint=True,
+    alpha=alpha
+) ########################################à
 
-#%% SAVE EXPLAINER3
-explainer3.cpu()
-torch.save(explainer3, f'models/{dataset} explainer3.pt')
-explainer3.to(device)
-
+#%% SAVE EXPLAINER4
+SAVE=False
+if SAVE:
+    explainer4.cpu()
+    torch.save(explainer4, f'models/{dataset} explainer4.pt')
+    explainer4.to(device)
 
 #%% COMPARISON
 def imputer_lower(x, S):
@@ -296,42 +345,52 @@ def imputer_upper(x, S):
     return mean.cpu().data.numpy()
 
 
+#%%
 mean_error_rate_fs=[]
 mean_error_rate_mfs=[]
+mean_error_rate_mfsc=[]
 mean_error_rate_ts=[]
 mean_error_rate_ks=[]
 mean_error_rate_ms=[]
 
 L2_distances_tf=[]
 L2_distances_tmf=[]
+L2_distances_tmfc=[]
 L2_distances_tk=[]
 L2_distances_tm=[]
 L2_distances_tf_err=[]
 L2_distances_tmf_err=[]
+L2_distances_tmfc_err=[]
 L2_distances_tk_err=[]
 L2_distances_tm_err=[]
+
 L1_distances_tf=[]
 L1_distances_tmf=[]
+L1_distances_tmfc=[]
 L1_distances_tk=[]
 L1_distances_tm=[]
 L1_distances_tf_err=[]
 L1_distances_tmf_err=[]
+L1_distances_tmfc_err=[]
 L1_distances_tk_err=[]
 L1_distances_tm_err=[]
 
 average_fs=[]
 average_mfs=[]
+average_mfsc=[]
 average_ts=[]
 average_ks=[]
 average_ms=[]
 average_fs_err=[]
 average_mfs_err=[]
+average_mfsc_err=[]
 average_ts_err=[]
 average_ks_err=[]
 average_ms_err=[]
 
 list_time_fs=[]
 list_time_mfs=[]
+list_time_mfsc=[]
 list_time_tk=[]
 list_time_ms=[]
 
@@ -340,7 +399,7 @@ X_train_s_TMP=pd.DataFrame(X_train_s, columns=feature_names)
 
 kernelshap_iters=128
 
-#%%
+#%% COMPUTE METRICS
 
 #for ind in tqdm(range(len(X_test_s))):
 for ind in tqdm(range(len(X_train_s[:100]))):
@@ -380,10 +439,10 @@ for ind in tqdm(range(len(X_train_s[:100]))):
     # Run MultiFastSHAP
     t1 = time.time()
     multi1, multi2 = fastshap3.shap_values(x, vector=1)
-    multi1 = multi1[0, :, :]
-    multi2 = multi2[0, :, :]
     t2 = time.time()
     list_time_mfs.append(t2 - t1)
+    multi1 = multi1[0, :, :]
+    multi2 = multi2[0, :, :]
 
     multifastshap_values_mean = []
     multifastshap_values_ci = []
@@ -407,6 +466,37 @@ for ind in tqdm(range(len(X_train_s[:100]))):
     multifastshap_values_ci = np.array(multifastshap_values_ci)
 
     mean_error_rate_mfs.append(error_rate_mfs)
+
+    # Run MultiFastSHAP
+    t1 = time.time()
+    multi1, multi2 = fastshap4.shap_values(x, vector=1)
+    t2 = time.time()
+    list_time_mfsc.append(t2 - t1)
+    multi1 = multi1[0, :, :]
+    multi2 = multi2[0, :, :]
+
+    multifastshap_const_values_mean = []
+    multifastshap_const_values_ci = []
+    error_rate_mfsc = 0
+    for el1, el2 in zip(multi1, multi2):
+        if y == 0:
+            if el1[0] > el2[1]:
+                error_rate_mfsc += 1
+        else:
+            if el2[0] > el1[1]:
+                error_rate_mfsc += 1
+        m1 = (el1[0] + el2[1]) / 2
+        m2 = (el2[0] + el1[1]) / 2
+        c1 = np.abs(m1 - el1[0])
+        c2 = np.abs(m2 - el2[0])
+
+        multifastshap_const_values_mean.append([m1, m2])
+        multifastshap_const_values_ci.append([c1, c2])
+
+    multifastshap_const_values_mean = np.array(multifastshap_const_values_mean)
+    multifastshap_const_values_ci = np.array(multifastshap_const_values_ci)
+
+    mean_error_rate_mfsc.append(error_rate_mfsc)
 
 
     # Run TrueSHAP/KernelSHAP
@@ -448,6 +538,9 @@ for ind in tqdm(range(len(X_train_s[:100]))):
     mean_mfs = multifastshap_values_mean[:, y]
     err_mfs = multifastshap_values_ci[:, y]
 
+    mean_mfsc = multifastshap_const_values_mean[:, y]
+    err_mfsc = multifastshap_const_values_ci[:, y]
+
 
     # Run MonteCarlo
     t1=time.time()
@@ -461,51 +554,63 @@ for ind in tqdm(range(len(X_train_s[:100]))):
     # Compute distances
     distance_tf=np.linalg.norm(np.array(mean_ts)-np.array(mean_fs))
     distance_tmf = np.linalg.norm(np.array(mean_ts) - np.array(mean_mfs))
+    distance_tmfc = np.linalg.norm(np.array(mean_ts) - np.array(mean_mfsc))
     distance_tk=np.linalg.norm(np.array(mean_ts)-np.array(mean_ks))
     distance_tm=np.linalg.norm(np.array(mean_ts)-np.array(mean_mc))
     distance_tf_err=np.linalg.norm(np.array(err_ts)-np.array(err_fs))
     distance_tmf_err = np.linalg.norm(np.array(err_ts) - np.array(err_mfs))
+    distance_tmfc_err = np.linalg.norm(np.array(err_ts) - np.array(err_mfsc))
     distance_tk_err=np.linalg.norm(np.array(err_ts)-np.array(err_ks))
     distance_tm_err=np.linalg.norm(np.array(err_ts)-np.array(err_mc))
     
     L2_distances_tf.append(distance_tf)
     L2_distances_tmf.append(distance_tmf)
+    L2_distances_tmfc.append(distance_tmfc)
     L2_distances_tk.append(distance_tk)
     L2_distances_tm.append(distance_tm)
     L2_distances_tf_err.append(distance_tf_err)
     L2_distances_tmf_err.append(distance_tmf_err)
+    L2_distances_tmfc_err.append(distance_tmfc_err)
     L2_distances_tk_err.append(distance_tk_err)
     L2_distances_tm_err.append(distance_tm_err)
     
     distance_tf_l1=np.linalg.norm(np.array(mean_ts)-np.array(mean_fs),ord=1)
     distance_tmf_l1 = np.linalg.norm(np.array(mean_ts) - np.array(mean_mfs), ord=1)
+    distance_tmfc_l1 = np.linalg.norm(np.array(mean_ts) - np.array(mean_mfsc), ord=1)
     distance_tk_l1=np.linalg.norm(np.array(mean_ts)-np.array(mean_ks),ord=1)
     distance_tm_l1=np.linalg.norm(np.array(mean_ts)-np.array(mean_mc),ord=1)
     distance_tf_err_l1=np.linalg.norm(np.array(err_ts)-np.array(err_fs),ord=1)
     distance_tmf_err_l1 = np.linalg.norm(np.array(err_ts) - np.array(err_mfs), ord=1)
+    distance_tmfc_err_l1 = np.linalg.norm(np.array(err_ts) - np.array(err_mfsc), ord=1)
     distance_tk_err_l1=np.linalg.norm(np.array(err_ts)-np.array(err_ks),ord=1)
     distance_tm_err_l1=np.linalg.norm(np.array(err_ts)-np.array(err_mc),ord=1)
     
     L1_distances_tf.append(distance_tf_l1)
     L1_distances_tmf.append(distance_tmf_l1)
+    L1_distances_tmfc.append(distance_tmfc_l1)
     L1_distances_tk.append(distance_tk_l1)
     L1_distances_tm.append(distance_tm_l1)
     L1_distances_tf_err.append(distance_tf_err_l1)
     L1_distances_tmf_err.append(distance_tmf_err_l1)
+    L1_distances_tmfc_err.append(distance_tmfc_err_l1)
     L1_distances_tk_err.append(distance_tk_err_l1)
     L1_distances_tm_err.append(distance_tm_err_l1)
     
     average_fs.append(mean_fs)
     average_mfs.append(mean_mfs)
+    average_mfsc.append(mean_mfsc)
     average_ts.append(mean_ts)
     average_ks.append(mean_ks)
     average_ms.append(mean_mc)
     average_fs_err.append(err_fs)
     average_mfs_err.append(err_mfs)
+    average_mfsc_err.append(err_mfsc)
     average_ts_err.append(err_ts)
     average_ks_err.append(err_ks)
     average_ms_err.append(err_mc)
     #break
+
+
 
 #%% SAVE VARIABLES
 SAVE=False
@@ -595,6 +700,7 @@ if LOAD:
 #%%
 average_fs_err=np.array(average_fs_err)
 average_mfs_err=np.array(average_mfs_err)
+average_mfsc_err=np.array(average_mfsc_err)
 average_ts_err=np.array(average_ts_err)
 average_ks_err=np.array(average_ks_err)
 average_ms_err=np.array(average_ms_err)
@@ -604,55 +710,110 @@ e2=np.mean(average_fs_err)
 e3=np.mean(average_ks_err)
 e4=np.mean(average_ms_err)
 e5=np.mean(average_mfs_err)
+e6=np.mean(average_mfsc_err)
 print("TRUE", round(e1,6))
 print("FAST",round(e2,6))
 print("KERN",round(e3,6))
 print("MCAR",round(e4,6))
 print("MFS",round(e5,6))
+print("MFSC",round(e6,6))
 
-#%%
+#%% print results
 print("AVERAGE L2 - MEAN - TRUE-FAST:",np.mean(L2_distances_tf))
 print("AVERAGE L2 - MEAN - TRUE-MULT:",np.mean(L2_distances_tmf))
+print("AVERAGE L2 - MEAN - TRUE-MULC:",np.mean(L2_distances_tmfc))
 print("AVERAGE L2 - MEAN - TRUE-KERN:",np.mean(L2_distances_tk))
 print("AVERAGE L2 - MEAN - TRUE-MONT:",np.mean(L2_distances_tm))
 print("AVERAGE L2 - ERR - TRUE-FAST:",np.mean(L2_distances_tf_err))
 print("AVERAGE L2 - ERR - TRUE-MULT:",np.mean(L2_distances_tmf_err))
+print("AVERAGE L2 - ERR - TRUE-MULC:",np.mean(L2_distances_tmfc_err))
 print("AVERAGE L2 - ERR - TRUE-KERN:",np.mean(L2_distances_tk_err))
 print("AVERAGE L2 - ERR - TRUE-MONT:",np.mean(L2_distances_tm_err))
 
 print("AVERAGE L1 - MEAN - TRUE-FAST:",np.mean(L1_distances_tf))
 print("AVERAGE L1 - MEAN - TRUE-MULT:",np.mean(L1_distances_tmf))
+print("AVERAGE L1 - MEAN - TRUE-MULC:",np.mean(L1_distances_tmfc))
 print("AVERAGE L1 - MEAN - TRUE-KERN:",np.mean(L1_distances_tk))
 print("AVERAGE L1 - MEAN - TRUE-MONT:",np.mean(L1_distances_tm))
 print("AVERAGE L1 - ERR - TRUE-FAST:",np.mean(L1_distances_tf_err))
 print("AVERAGE L1 - ERR - TRUE-MULT:",np.mean(L1_distances_tmf_err))
+print("AVERAGE L1 - ERR - TRUE-MULC:",np.mean(L1_distances_tmfc_err))
 print("AVERAGE L1 - ERR - TRUE-KERN:",np.mean(L1_distances_tk_err))
 print("AVERAGE L1 - ERR - TRUE-MONT:",np.mean(L1_distances_tm_err))
 
 print("AVERAGE SAMPLE TIME FAST:",np.mean(list_time_fs))
 print("AVERAGE SAMPLE TIME MULT:",np.mean(list_time_mfs))
+print("AVERAGE SAMPLE TIME MULC:",np.mean(list_time_mfsc))
 print("AVERAGE SAMPLE TIME TRUE/KERNEL:",np.mean(list_time_tk))
 print("AVERAGE SAMPLE TIME MONTECARLO:",np.mean(list_time_ms))
 
 print("TOTAL SAMPLE TIME FAST:",np.sum(list_time_fs))
 print("TOTAL SAMPLE TIME MULT:",np.sum(list_time_mfs))
+print("TOTAL SAMPLE TIME MULC:",np.sum(list_time_mfsc))
 print("TOTAL SAMPLE TIME TRUE/KERNEL:",np.sum(list_time_tk))
 print("TOTAL SAMPLE TIME MONTECARLO:",np.sum(list_time_ms))
 
 print("AVERAGE ERROR FAST:",np.mean(mean_error_rate_fs))
 print("AVERAGE ERROR MULT:",np.mean(mean_error_rate_mfs))
+print("AVERAGE ERROR MULC:",np.mean(mean_error_rate_mfsc))
 print("AVERAGE ERROR TRUE:",np.mean(mean_error_rate_ts))
 print("AVERAGE ERROR KERNEL:",np.mean(mean_error_rate_ks))
 print("AVERAGE ERROR MONTECARLO:",np.mean(mean_error_rate_ms))
 
+#%% print results to file
+with open(f'metrics/{dataset}_results_Constraint_{alpha}.txt', 'a+') as f:
+    print("AVERAGE L2 - MEAN - TRUE-FAST:", np.mean(L2_distances_tf), file=f)
+    print("AVERAGE L2 - MEAN - TRUE-MULT:", np.mean(L2_distances_tmf), file=f)
+    print("AVERAGE L2 - MEAN - TRUE-MULC:", np.mean(L2_distances_tmfc), file=f)
+    print("AVERAGE L2 - MEAN - TRUE-KERN:", np.mean(L2_distances_tk), file=f)
+    print("AVERAGE L2 - MEAN - TRUE-MONT:", np.mean(L2_distances_tm), file=f)
+    print("AVERAGE L2 - ERR - TRUE-FAST:", np.mean(L2_distances_tf_err), file=f)
+    print("AVERAGE L2 - ERR - TRUE-MULT:", np.mean(L2_distances_tmf_err), file=f)
+    print("AVERAGE L2 - ERR - TRUE-MULC:", np.mean(L2_distances_tmfc_err), file=f)
+    print("AVERAGE L2 - ERR - TRUE-KERN:", np.mean(L2_distances_tk_err), file=f)
+    print("AVERAGE L2 - ERR - TRUE-MONT:", np.mean(L2_distances_tm_err), file=f)
+
+    print("AVERAGE L1 - MEAN - TRUE-FAST:", np.mean(L1_distances_tf), file=f)
+    print("AVERAGE L1 - MEAN - TRUE-MULT:", np.mean(L1_distances_tmf), file=f)
+    print("AVERAGE L1 - MEAN - TRUE-MULC:", np.mean(L1_distances_tmfc), file=f)
+    print("AVERAGE L1 - MEAN - TRUE-KERN:", np.mean(L1_distances_tk), file=f)
+    print("AVERAGE L1 - MEAN - TRUE-MONT:", np.mean(L1_distances_tm), file=f)
+    print("AVERAGE L1 - ERR - TRUE-FAST:", np.mean(L1_distances_tf_err), file=f)
+    print("AVERAGE L1 - ERR - TRUE-MULT:", np.mean(L1_distances_tmf_err), file=f)
+    print("AVERAGE L1 - ERR - TRUE-MULC:", np.mean(L1_distances_tmfc_err), file=f)
+    print("AVERAGE L1 - ERR - TRUE-KERN:", np.mean(L1_distances_tk_err), file=f)
+    print("AVERAGE L1 - ERR - TRUE-MONT:", np.mean(L1_distances_tm_err), file=f)
+
+    print("AVERAGE SAMPLE TIME FAST:", np.mean(list_time_fs), file=f)
+    print("AVERAGE SAMPLE TIME MULT:", np.mean(list_time_mfs), file=f)
+    print("AVERAGE SAMPLE TIME MULC:", np.mean(list_time_mfsc), file=f)
+    print("AVERAGE SAMPLE TIME TRUE/KERNEL:", np.mean(list_time_tk), file=f)
+    print("AVERAGE SAMPLE TIME MONTECARLO:", np.mean(list_time_ms), file=f)
+
+    print("TOTAL SAMPLE TIME FAST:", np.sum(list_time_fs), file=f)
+    print("TOTAL SAMPLE TIME MULT:", np.sum(list_time_mfs), file=f)
+    print("TOTAL SAMPLE TIME MULC:", np.sum(list_time_mfsc), file=f)
+    print("TOTAL SAMPLE TIME TRUE/KERNEL:", np.sum(list_time_tk), file=f)
+    print("TOTAL SAMPLE TIME MONTECARLO:", np.sum(list_time_ms), file=f)
+
+    print("AVERAGE ERROR FAST:", np.mean(mean_error_rate_fs), file=f)
+    print("AVERAGE ERROR MULT:", np.mean(mean_error_rate_mfs), file=f)
+    print("AVERAGE ERROR MULC:", np.mean(mean_error_rate_mfsc), file=f)
+    print("AVERAGE ERROR TRUE:", np.mean(mean_error_rate_ts), file=f)
+    print("AVERAGE ERROR KERNEL:", np.mean(mean_error_rate_ks), file=f)
+    print("AVERAGE ERROR MONTECARLO:", np.mean(mean_error_rate_ms), file=f)
+f.close()
+
 #%%
 average_fs=np.array(average_fs)
 average_mfs=np.array(average_mfs)
+average_mfsc=np.array(average_mfsc)
 average_ts=np.array(average_ts)
 average_ks=np.array(average_ks)
 average_ms=np.array(average_ms)
 average_fs_err=np.array(average_fs_err)
 average_mfs_err=np.array(average_mfs_err)
+average_mfsc_err=np.array(average_mfsc_err)
 average_ts_err=np.array(average_ts_err)
 average_ks_err=np.array(average_ks_err)
 average_ms_err=np.array(average_ms_err)
@@ -662,29 +823,51 @@ m2=np.mean(average_fs,axis=0)
 m3=np.mean(average_ks,axis=0)
 m4=np.mean(average_ms,axis=0)
 m5=np.mean(average_mfs,axis=0)
+m6=np.mean(average_mfsc,axis=0)
 e1=np.mean(average_ts_err,axis=0)
 e2=np.mean(average_fs_err,axis=0)
 e3=np.mean(average_ks_err,axis=0)
 e4=np.mean(average_ms_err,axis=0)
 e5=np.mean(average_mfs_err,axis=0)
+e6=np.mean(average_mfsc_err,axis=0)
 
 #%% PLOT GLOBAL SV
 plt.figure(figsize=(16, 9))
 width = 0.75
 kernelshap_iters = 128
-N=4
+N=6
 error_kw=dict(lw=3, capsize=10, capthick=3)
 
-plt.bar(np.arange(num_features) - 2*width/N, m1, width / N, label='Interval True SHAP',  yerr=e1, error_kw=error_kw, color='tab:green')
-plt.bar(np.arange(num_features) - 1*width/N, m2, width / N, label='Interval FastSHAP',  yerr=e2, error_kw=error_kw, color='tab:orange')
-plt.bar(np.arange(num_features) - 0.0*width/N, m5, width / N, label='Interval MultiFastSHAP',  yerr=e5, error_kw=error_kw, color='tab:olive')
-plt.bar(np.arange(num_features) + 1*width/N, m3, width / N, label='Interval KernelSHAP', yerr=e3, error_kw=error_kw, color='tab:red')
-plt.bar(np.arange(num_features) + 2*width/N, m4, width / N, label='Interval MonteCarlo',  yerr=e4, error_kw=error_kw, color='tab:purple')
+plt.bar(np.arange(num_features) - 2.5*width/N, m1, width / N, label='Interval True SHAP',  yerr=e1, error_kw=error_kw, color='tab:green')
+plt.bar(np.arange(num_features) - 1.5*width/N, m2, width / N, label='Interval FastSHAP',  yerr=e2, error_kw=error_kw, color='tab:orange')
+plt.bar(np.arange(num_features) - 0.5*width/N, m5, width / N, label='Interval MultiFastSHAP',  yerr=e5, error_kw=error_kw, color='tab:olive')
+plt.bar(np.arange(num_features) + 0.5*width/N, m6, width / N, label='Interval MultiFastSHAP-C',  yerr=e6, error_kw=error_kw, color='tab:brown')
+plt.bar(np.arange(num_features) + 1.5*width/N, m3, width / N, label='Interval KernelSHAP', yerr=e3, error_kw=error_kw, color='tab:red')
+plt.bar(np.arange(num_features) + 2.5*width/N, m4, width / N, label='Interval MonteCarlo',  yerr=e4, error_kw=error_kw, color='tab:purple')
 
 plt.legend(fontsize=16)
 plt.tick_params(labelsize=14)
 plt.ylabel('SHAP Values', fontsize=16)
 plt.xticks(np.arange(num_features), feature_names, rotation=35, rotation_mode='anchor', ha='right')
-plt.savefig(f'plots/{dataset} Global Interval SV comparison', bbox_inches = "tight")
+plt.savefig(f'plots/{dataset} Global Interval SV comparison - Constraint_{alpha}', bbox_inches = "tight")
+
+plt.show()
+
+#%% PLOT GLOBAL SV
+plt.figure(figsize=(16, 9))
+width = 0.75
+kernelshap_iters = 128
+N=3
+error_kw=dict(lw=3, capsize=10, capthick=3)
+
+plt.bar(np.arange(num_features) - 1*width/N, m1, width / N, label='Interval True SHAP',  yerr=e1, error_kw=error_kw, color='tab:green')
+plt.bar(np.arange(num_features) - 0*width/N, m5, width / N, label='Interval MultiFastSHAP',  yerr=e5, error_kw=error_kw, color='tab:olive')
+plt.bar(np.arange(num_features) + 1*width/N, m6, width / N, label='Interval MultiFastSHAP-C',  yerr=e6, error_kw=error_kw, color='tab:brown')
+
+plt.legend(fontsize=16)
+plt.tick_params(labelsize=14)
+plt.ylabel('SHAP Values', fontsize=16)
+plt.xticks(np.arange(num_features), feature_names, rotation=35, rotation_mode='anchor', ha='right')
+plt.savefig(f'plots/{dataset} Global Interval SV comparison_Constraint {alpha}_TMC.jpg', bbox_inches = "tight")
 
 plt.show()

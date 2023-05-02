@@ -411,9 +411,9 @@ class FastSHAP:
             with torch.no_grad():
                 zeros = torch.zeros(1, self.num_players, dtype=torch.float32, device=device)
                 if vector==1:
-                    tmp1,_=self.imputer(x[:1].to(device.to(device), zeros))
+                    tmp1,_=self.imputer(x[:1].to(device, zeros))
                 else:
-                    _,tmp1=self.imputer(x[:1].to(device.to(device), zeros))
+                    _,tmp1=self.imputer(x[:1].to(device, zeros))
                 null = self.link(tmp1) # NON PORTA CONTRIBUTO
             if len(null.shape) == 1:
                 null = null.reshape(1, 1)
