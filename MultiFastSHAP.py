@@ -103,7 +103,7 @@ def generate_validation_data(val_set, imputer, validation_samples, sampler, batc
     return val_S, val_values1, val_values2
 
 
-def validate(val_loader, imputer, explainer, null1, null2, link, normalization, approx_null, debug):
+def validate(val_loader, imputer, explainer, null1, null2, link, normalization, approx_null, debug, constraint):
     with torch.no_grad():
         # Setup.
         device = next(explainer.parameters()).device
@@ -145,7 +145,20 @@ def validate(val_loader, imputer, explainer, null1, null2, link, normalization, 
                 print("VALIDATION approx shape2", approx2.shape)
             loss1 = loss_fn(approx1, values1)
             loss2 = loss_fn(approx2, values2)
-            loss = loss1 + loss2
+            if constraint:
+                vec1 = approx1[:, 0].unsqueeze(1)
+                vec2 = approx2[:, 1].unsqueeze(1)
+                vec3 = torch.cat((vec1, vec2), 1)
+
+                vec4 = approx1[:, 1].unsqueeze(1)
+                vec5 = approx2[:, 0].unsqueeze(1)
+                vec6 = torch.cat((vec5, vec4), 1)
+
+                loss3 = loss_fn(vec3, vec6)
+
+                loss =  loss1 + loss2 + loss3  # + loss4)
+            else:
+                loss = loss1 + loss2
 
             # Update average.
             N += len(x)
@@ -201,7 +214,8 @@ class MultiFastSHAP:
               verbose=False,
               weight_decay=0.01,
               approx_null=True,
-              debug=False
+              debug=False,
+              constraint = False
               ):
 
         # Set up explainer model.
