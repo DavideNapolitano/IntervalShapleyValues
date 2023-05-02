@@ -370,10 +370,16 @@ class MultiFastSHAP:
                     #loss = loss + eff_lambda * loss_fn(total, grand - null)
 
                 if constraint:
-                    loss3 = loss_fn(approx1, approx2)
-                    #loss4 = loss_fn(values1, values2)
+                    vec1 = approx1[:, 0].unsqueeze(1)
+                    vec2 = approx2[:, 1].unsqueeze(1)
+                    vec3 = torch.cat((vec1, vec2), 1)
 
-                    # Take gradient step.
+                    vec4 = approx1[:, 1].unsqueeze(1)
+                    vec5 = approx2[:, 0].unsqueeze(1)
+                    vec6 = torch.cat((vec5, vec4), 1)
+
+                    loss3 = loss_fn(vec3, vec6)
+
                     loss = num_players * (loss1 + loss2 + loss3)  # + loss4)
                 else:
                     loss = num_players * (loss1 + loss2)
