@@ -369,8 +369,14 @@ class MultiFastSHAP:
                     print("EFF_LAMBDA")
                     #loss = loss + eff_lambda * loss_fn(total, grand - null)
 
-                # Take gradient step.
-                loss = loss1 * num_players + loss2 * num_players
+                if constraint:
+                    loss3 = loss_fn(approx1, approx2)
+                    #loss4 = loss_fn(values1, values2)
+
+                    # Take gradient step.
+                    loss = num_players * (loss1 + loss2 + loss3)  # + loss4)
+                else:
+                    loss = num_players * (loss1 + loss2)
                 loss.backward()
                 optimizer.step()
                 explainer.zero_grad()
