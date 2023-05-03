@@ -273,7 +273,7 @@ explainer4 = MultiTaskExplainer(512).to(device)
 
 fastshap4 = MultiFastSHAP(explainer4, surrogate_VV, normalization="additive", link=nn.Softmax(dim=-1))
 
-alpha=0.01
+alpha=0.001
 # Train
 fastshap4.train(
     X_train_s,
