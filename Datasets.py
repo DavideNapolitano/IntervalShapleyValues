@@ -84,7 +84,7 @@ def WBCD():
     return X_train_s, X_val_s, X_test_s, Y_train, Y_val, Y_test, feature_names, num_features, dataset
 
 def Heart():
-    dataset="Heart"
+
     dataset = pd.read_csv('datasets\heart.csv', sep=",")
     dataset=dataset.drop("id",axis=1)
 
@@ -107,6 +107,7 @@ def Heart():
     X_train_s = ss.transform(X_train)
     X_val_s = ss.transform(X_val)
     X_test_s = ss.transform(X_test)
+    dataset="Heart"
 
     return X_train_s, X_val_s, X_test_s, Y_train, Y_val, Y_test, feature_names, num_features, dataset
 
