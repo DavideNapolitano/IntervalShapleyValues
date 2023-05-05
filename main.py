@@ -21,12 +21,6 @@ from importlib import reload
 import random
 from Metrics import compute_metrics
 
-
-print(os.getcwd())
-print(torch.cuda.is_available())
-print(torch.cuda.get_device_name(0))
-print(torch.cuda.device_count())
-
 #%% DATASET
 X_train_s, X_val_s, X_test_s, Y_train, Y_val, Y_test, feature_names, num_features, dataset = Datasets.Heart()
 
@@ -176,7 +170,7 @@ np.random.seed(SEED)
 random.seed(SEED)
 
 
-LOAD=False
+LOAD=True
 if LOAD and os.path.isfile(f'models/{dataset} explainer2.pt'):
     print('Loading saved explainer model')
     explainer2 = torch.load(f'models/{dataset} explainer2.pt').to(device)
@@ -277,7 +271,7 @@ else:
         weight_decay=0.05,
         training_seed=SEED,
         lookback=20,
-        debug=False,
+        debug=True,
         constraint=False
     ) ########################################à
 
@@ -294,7 +288,7 @@ torch.manual_seed(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
 
-LOAD=False
+LOAD=True
 if LOAD and os.path.isfile(f'models/{dataset} explainer4.pt'):
     print('Loading saved explainer model')
     explainer4 = torch.load(f'models/{dataset} explainer4.pt').to(device)

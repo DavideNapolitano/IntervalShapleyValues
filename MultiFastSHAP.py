@@ -372,7 +372,7 @@ class MultiFastSHAP:
                 # print("value shape", values.shape)
                 values1 = values1.reshape(batch_size, num_samples, -1)
                 values2 = values2.reshape(batch_size, num_samples, -1)
-                if debug and epoch == 0 and iter < 5:
+                if debug and epoch == 150 and iter < 5:
                     print("VALUES RESHAPE1", values1.shape, values1)
                     print("VALUES RESHAPE2", values2.shape, values2)
 
@@ -383,9 +383,17 @@ class MultiFastSHAP:
                     approx1 = torch.matmul(S, pred1)
                     approx2 = torch.matmul(S, pred2)
 
-                if debug and epoch == 0 and iter < 5:
+                if debug and epoch == 150 and iter < 5:
                     print("APPROX1", approx1.shape, approx1)
                     print("APPROX2", approx2.shape, approx2)
+
+                if debug and epoch == 150 and iter < 5:
+                    temp1=values1-null1
+                    temp2=values2-null2
+                    print("PRED1:", torch.matmul(S, pred1).shape, torch.matmul(S, pred1))
+                    print("VALUES1-NULL1", temp1.shape, temp1)
+                    print("PRED2:", torch.matmul(S, pred2).shape, torch.matmul(S, pred2))
+                    print("VALUES2-NULL2", temp2.shape, temp2)
 
                 loss1 = loss_fn(approx1, values1)
                 loss2 = loss_fn(approx2, values2)
