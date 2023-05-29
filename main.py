@@ -22,7 +22,7 @@ import random
 from Metrics import compute_metrics
 
 #%% DATASET
-X_train_s, X_val_s, X_test_s, Y_train, Y_val, Y_test, feature_names, num_features, dataset = Datasets.Heart()
+X_train_s, X_val_s, X_test_s, Y_train, Y_val, Y_test, feature_names, num_features, dataset = Datasets.Monks()
 
 #%% ORIGINAL MODEL
 modelRF = RandomForestClassifier(random_state=0)
@@ -170,7 +170,7 @@ np.random.seed(SEED)
 random.seed(SEED)
 
 
-LOAD=True
+LOAD=False
 if LOAD and os.path.isfile(f'models/{dataset} explainer2.pt'):
     print('Loading saved explainer model')
     explainer2 = torch.load(f'models/{dataset} explainer2.pt').to(device)
@@ -251,7 +251,6 @@ if LOAD and os.path.isfile(f'models/{dataset} explainer3.pt'):
     fastshap3 = MultiFastSHAP(explainer3, surrogate_VV, normalization='additive',link=nn.Softmax(dim=-1))
 else:
     explainer3 = MultiTaskExplainer(512).to(device)
-
     fastshap3 = MultiFastSHAP(explainer3, surrogate_VV, normalization="additive", link=nn.Softmax(dim=-1))
 
     # Train
@@ -271,8 +270,8 @@ else:
         weight_decay=0.05,
         training_seed=SEED,
         lookback=20,
-        debug=True,
-        constraint=False
+        debug=False,
+        constraint=-1
     ) ########################################à
 
 #%% SAVE EXPLAINER3
@@ -317,7 +316,7 @@ else:
         lookback=20,
         debug_val=False,
         debug=False,
-        constraint=True,
+        constraint=2,
         alpha=alpha
     ) ########################################à
 
