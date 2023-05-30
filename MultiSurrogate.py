@@ -59,10 +59,10 @@ def generate_labels_VV(dataset, inner_model, batch_size):
         # Setup.
         preds_v1 = []
         preds_v2=[]
-        if isinstance(inner_model, torch.nn.Module):
-            device = next(inner_model.parameters()).device
-        else:
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # if isinstance(inner_model, torch.nn.Module):
+        device = 'cpu'
+        # else:
+        #     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         loader = DataLoader(dataset, batch_size=batch_size)
 
         for (x,) in loader:
@@ -123,18 +123,18 @@ class Surrogate_VV:
         self.used_loss1=loss_fn1
         #self.used_loss2=loss_fn2
           
-        print("LEN TRAIN DATA:",len(train_data),"LEN TRAIN SET:",len(train_set))
+        # print("LEN TRAIN DATA:",len(train_data),"LEN TRAIN SET:",len(train_set))
 
         # Set up train data loader.
         # RANDOM SAMPLER DA TORCH
-        print("NUM_SAMPLES:",int(np.ceil(len(train_set) / batch_size))*batch_size)
+        # print("NUM_SAMPLES:",int(np.ceil(len(train_set) / batch_size))*batch_size)
 
         random_sampler = RandomSampler( train_set, replacement=True, num_samples=int(np.ceil(len(train_set) / batch_size))*batch_size)
-        print("Random Sampler", random_sampler)
+        # print("Random Sampler", random_sampler)
         batch_sampler = BatchSampler(random_sampler, batch_size=batch_size, drop_last=True)
-        print("Batch Sampler", batch_sampler)
+        # print("Batch Sampler", batch_sampler)
         train_loader = DataLoader(train_set, batch_sampler=batch_sampler)
-        print("Train Loader:",len(train_loader),len(train_loader)*batch_size)
+        # print("Train Loader:",len(train_loader),len(train_loader)*batch_size)
 
         # Set up validation dataset.
         sampler = UniformSampler(self.num_players) #USATO PER CREARE LA MASCHERA
@@ -149,7 +149,7 @@ class Surrogate_VV:
             val_data = torch.tensor(val_data, dtype=torch.float32)
 
         if isinstance(val_data, torch.Tensor):
-            print("IS INSTANCE")
+            # print("IS INSTANCE")
             # Generate validation labels.
             y_val_v1, y_val_v2 = generate_labels_VV(TensorDataset(val_data), original_model_VV, validation_batch_size) ######################
             y_val_v1_repeat = y_val_v1.repeat(validation_samples, *[1 for _ in y_val_v1.shape[1:]])
@@ -186,7 +186,7 @@ class Surrogate_VV:
         if training_seed is not None:
             torch.manual_seed(training_seed)
 
-        print("STARTING TRAINING PHASE")
+        # print("STARTING TRAINING PHASE")
         val_loss_prob=[]
         val_loss_prob_L=[]
         val_loss_prob_U=[]

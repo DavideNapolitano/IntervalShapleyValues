@@ -6,7 +6,7 @@ import time
 from shapreg import ShapleyRegression, PredictionGame
 import pickle
 
-def compute_metrics(DATA, FEATURE_NAMES, LABELS, fastshap1, fastshap2, fastshap3, fastshap4, dataset, device, surrogate_VV, SAVE=False):
+def compute_metrics(DATA, FEATURE_NAMES, LABELS, fastshap1, fastshap2, fastshap3, fastshap4, fastshap5, dataset, device, surrogate_VV, modelRF, om_VV, seed, alpha, SAVE=False):
     def imputer_lower(x, S):
         x = torch.tensor(x, dtype=torch.float32, device=device)
         S = torch.tensor(S, dtype=torch.float32, device=device)
@@ -49,6 +49,7 @@ def compute_metrics(DATA, FEATURE_NAMES, LABELS, fastshap1, fastshap2, fastshap3
     mean_error_rate_fs = []
     mean_error_rate_mfs = []
     mean_error_rate_mfsc = []
+    mean_error_rate_mfsc2 = []
     mean_error_rate_ts = []
     mean_error_rate_ks = []
     mean_error_rate_ms = []
@@ -56,34 +57,40 @@ def compute_metrics(DATA, FEATURE_NAMES, LABELS, fastshap1, fastshap2, fastshap3
     L2_distances_tf = []
     L2_distances_tmf = []
     L2_distances_tmfc = []
+    L2_distances_tmfc2 = []
     L2_distances_tk = []
     L2_distances_tm = []
     L2_distances_tf_err = []
     L2_distances_tmf_err = []
     L2_distances_tmfc_err = []
+    L2_distances_tmfc2_err = []
     L2_distances_tk_err = []
     L2_distances_tm_err = []
 
     L1_distances_tf = []
     L1_distances_tmf = []
     L1_distances_tmfc = []
+    L1_distances_tmfc2 = []
     L1_distances_tk = []
     L1_distances_tm = []
     L1_distances_tf_err = []
     L1_distances_tmf_err = []
     L1_distances_tmfc_err = []
+    L1_distances_tmfc2_err = []
     L1_distances_tk_err = []
     L1_distances_tm_err = []
 
     average_fs = []
     average_mfs = []
     average_mfsc = []
+    average_mfsc2 = []
     average_ts = []
     average_ks = []
     average_ms = []
     average_fs_err = []
     average_mfs_err = []
     average_mfsc_err = []
+    average_mfsc2_err = []
     average_ts_err = []
     average_ks_err = []
     average_ms_err = []
@@ -91,10 +98,11 @@ def compute_metrics(DATA, FEATURE_NAMES, LABELS, fastshap1, fastshap2, fastshap3
     list_time_fs = []
     list_time_mfs = []
     list_time_mfsc = []
+    list_time_mfsc2 = []
     list_time_tk = []
     list_time_ms = []
 
-    X_train_s_TMP = pd.DataFrame(DATA, columns=FEATURE_NAMES)
+    # X_train_s_TMP = pd.DataFrame(DATA, columns=FEATURE_NAMES)
     # X_test_s_TMP=pd.DataFrame(X_test_s, columns=feature_names)
     kernelshap_iters=128
 
@@ -194,6 +202,37 @@ def compute_metrics(DATA, FEATURE_NAMES, LABELS, fastshap1, fastshap2, fastshap3
 
         mean_error_rate_mfsc.append(error_rate_mfsc)
 
+        # Run MultiFastSHAP
+        t1 = time.time()
+        multi1, multi2 = fastshap5.shap_values(x, vector=1)
+        t2 = time.time()
+        list_time_mfsc2.append(t2 - t1)
+        multi1 = multi1[0, :, :]
+        multi2 = multi2[0, :, :]
+
+        multifastshap_const_values_mean2 = []
+        multifastshap_const_values_ci2 = []
+        error_rate_mfsc2 = 0
+        for el1, el2 in zip(multi1, multi2):
+            if y == 0:
+                if el1[0] > el2[1]:
+                    error_rate_mfsc2 += 1
+            else:
+                if el2[0] > el1[1]:
+                    error_rate_mfsc2 += 1
+            m1 = (el1[0] + el2[1]) / 2
+            m2 = (el2[0] + el1[1]) / 2
+            c1 = np.abs(m1 - el1[0])
+            c2 = np.abs(m2 - el2[0])
+
+            multifastshap_const_values_mean2.append([m1, m2])
+            multifastshap_const_values_ci2.append([c1, c2])
+
+        multifastshap_const_values_mean2 = np.array(multifastshap_const_values_mean2)
+        multifastshap_const_values_ci2 = np.array(multifastshap_const_values_ci2)
+
+        mean_error_rate_mfsc2.append(error_rate_mfsc2)
+
         # Run TrueSHAP/KernelSHAP
 
         t1 = time.time()
@@ -238,9 +277,12 @@ def compute_metrics(DATA, FEATURE_NAMES, LABELS, fastshap1, fastshap2, fastshap3
         mean_mfsc = multifastshap_const_values_mean[:, y]
         err_mfsc = multifastshap_const_values_ci[:, y]
 
+        mean_mfsc2 = multifastshap_const_values_mean2[:, y]
+        err_mfsc2 = multifastshap_const_values_ci2[:, y]
+
         # Run MonteCarlo
         t1 = time.time()
-        mean_mc, err_mc, emc = 0, 0, 0  # MonteCarlo(ind, X_train_s_TMP, modelRF, om)
+        mean_mc, err_mc, emc = 0, 0, 0  # MonteCarlo(ind, DATA, modelRF, om_VV) #OK
         t2 = time.time()
         list_time_ms.append(t2 - t1)
 
@@ -250,160 +292,187 @@ def compute_metrics(DATA, FEATURE_NAMES, LABELS, fastshap1, fastshap2, fastshap3
         distance_tf = np.linalg.norm(np.array(mean_ts) - np.array(mean_fs))
         distance_tmf = np.linalg.norm(np.array(mean_ts) - np.array(mean_mfs))
         distance_tmfc = np.linalg.norm(np.array(mean_ts) - np.array(mean_mfsc))
+        distance_tmfc2 = np.linalg.norm(np.array(mean_ts) - np.array(mean_mfsc2))
         distance_tk = np.linalg.norm(np.array(mean_ts) - np.array(mean_ks))
         distance_tm = np.linalg.norm(np.array(mean_ts) - np.array(mean_mc))
         distance_tf_err = np.linalg.norm(np.array(err_ts) - np.array(err_fs))
         distance_tmf_err = np.linalg.norm(np.array(err_ts) - np.array(err_mfs))
         distance_tmfc_err = np.linalg.norm(np.array(err_ts) - np.array(err_mfsc))
+        distance_tmfc2_err = np.linalg.norm(np.array(err_ts) - np.array(err_mfsc2))
         distance_tk_err = np.linalg.norm(np.array(err_ts) - np.array(err_ks))
         distance_tm_err = np.linalg.norm(np.array(err_ts) - np.array(err_mc))
 
         L2_distances_tf.append(distance_tf)
         L2_distances_tmf.append(distance_tmf)
         L2_distances_tmfc.append(distance_tmfc)
+        L2_distances_tmfc2.append(distance_tmfc2)
         L2_distances_tk.append(distance_tk)
         L2_distances_tm.append(distance_tm)
         L2_distances_tf_err.append(distance_tf_err)
         L2_distances_tmf_err.append(distance_tmf_err)
         L2_distances_tmfc_err.append(distance_tmfc_err)
+        L2_distances_tmfc2_err.append(distance_tmfc2_err)
         L2_distances_tk_err.append(distance_tk_err)
         L2_distances_tm_err.append(distance_tm_err)
 
         distance_tf_l1 = np.linalg.norm(np.array(mean_ts) - np.array(mean_fs), ord=1)
         distance_tmf_l1 = np.linalg.norm(np.array(mean_ts) - np.array(mean_mfs), ord=1)
         distance_tmfc_l1 = np.linalg.norm(np.array(mean_ts) - np.array(mean_mfsc), ord=1)
+        distance_tmfc2_l1 = np.linalg.norm(np.array(mean_ts) - np.array(mean_mfsc2), ord=1)
         distance_tk_l1 = np.linalg.norm(np.array(mean_ts) - np.array(mean_ks), ord=1)
         distance_tm_l1 = np.linalg.norm(np.array(mean_ts) - np.array(mean_mc), ord=1)
         distance_tf_err_l1 = np.linalg.norm(np.array(err_ts) - np.array(err_fs), ord=1)
         distance_tmf_err_l1 = np.linalg.norm(np.array(err_ts) - np.array(err_mfs), ord=1)
         distance_tmfc_err_l1 = np.linalg.norm(np.array(err_ts) - np.array(err_mfsc), ord=1)
+        distance_tmfc2_err_l1 = np.linalg.norm(np.array(err_ts) - np.array(err_mfsc2), ord=1)
         distance_tk_err_l1 = np.linalg.norm(np.array(err_ts) - np.array(err_ks), ord=1)
         distance_tm_err_l1 = np.linalg.norm(np.array(err_ts) - np.array(err_mc), ord=1)
 
         L1_distances_tf.append(distance_tf_l1)
         L1_distances_tmf.append(distance_tmf_l1)
         L1_distances_tmfc.append(distance_tmfc_l1)
+        L1_distances_tmfc2.append(distance_tmfc2_l1)
         L1_distances_tk.append(distance_tk_l1)
         L1_distances_tm.append(distance_tm_l1)
         L1_distances_tf_err.append(distance_tf_err_l1)
         L1_distances_tmf_err.append(distance_tmf_err_l1)
         L1_distances_tmfc_err.append(distance_tmfc_err_l1)
+        L1_distances_tmfc2_err.append(distance_tmfc2_err_l1)
         L1_distances_tk_err.append(distance_tk_err_l1)
         L1_distances_tm_err.append(distance_tm_err_l1)
 
         average_fs.append(mean_fs)
         average_mfs.append(mean_mfs)
         average_mfsc.append(mean_mfsc)
+        average_mfsc2.append(mean_mfsc2)
         average_ts.append(mean_ts)
         average_ks.append(mean_ks)
         average_ms.append(mean_mc)
         average_fs_err.append(err_fs)
         average_mfs_err.append(err_mfs)
         average_mfsc_err.append(err_mfsc)
+        average_mfsc2_err.append(err_mfsc2)
         average_ts_err.append(err_ts)
         average_ks_err.append(err_ks)
         average_ms_err.append(err_mc)
 
 
     if SAVE:
-        with open(f'dump/{dataset}L2_distances_tf.pkl', 'wb') as f:
+        with open(f'pipeline/dump/{dataset}L2_distances_tf_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L2_distances_tf, f)
-        with open(f'dump/{dataset}L2_distances_tmf.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L2_distances_tmf_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L2_distances_tmf, f)
-        with open(f'dump/{dataset}L2_distances_tmfc.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L2_distances_tmfc_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L2_distances_tmfc, f)
-        with open(f'dump/{dataset}L2_distances_tk.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L2_distances_tmfc2_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
+            pickle.dump(L2_distances_tmfc2, f)
+        with open(f'dump/{dataset}L2_distances_tk_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L2_distances_tk, f)
-        with open(f'dump/{dataset}L2_distances_tm.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L2_distances_tm_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L2_distances_tm, f)
-        with open(f'dump/{dataset}L2_distances_tf_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L2_distances_tf_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L2_distances_tf_err, f)
-        with open(f'dump/{dataset}L2_distances_tmf_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L2_distances_tmf_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L2_distances_tmf_err, f)
-        with open(f'dump/{dataset}L2_distances_tmfc_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L2_distances_tmfc_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L2_distances_tmfc_err, f)
-        with open(f'dump/{dataset}L2_distances_tk_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L2_distances_tmfc2_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
+            pickle.dump(L2_distances_tmfc2_err, f)
+        with open(f'dump/{dataset}L2_distances_tk_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L2_distances_tk_err, f)
-        with open(f'dump/{dataset}L2_distances_tm_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L2_distances_tm_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L2_distances_tm_err, f)
 
-        with open(f'dump/{dataset}L1_distances_tf.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L1_distances_tf_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L1_distances_tf, f)
-        with open(f'dump/{dataset}L1_distances_tmf.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L1_distances_tmf_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L1_distances_tmf, f)
-        with open(f'dump/{dataset}L1_distances_tmfc.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L1_distances_tmfc_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L1_distances_tmfc, f)
-        with open(f'dump/{dataset}L1_distances_tk.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L1_distances_tmfc2_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
+            pickle.dump(L1_distances_tmfc2, f)
+        with open(f'dump/{dataset}L1_distances_tk_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L1_distances_tk, f)
-        with open(f'dump/{dataset}L1_distances_tm.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L1_distances_tm_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L1_distances_tm, f)
-        with open(f'dump/{dataset}L1_distances_tf_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L1_distances_tf_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L1_distances_tf_err, f)
-        with open(f'dump/{dataset}L1_distances_tmf_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L1_distances_tmf_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L1_distances_tmf_err, f)
-        with open(f'dump/{dataset}L1_distances_tmfc_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L1_distances_tmfc_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L1_distances_tmfc_err, f)
-        with open(f'dump/{dataset}L1_distances_tk_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L1_distances_tmfc2_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
+            pickle.dump(L1_distances_tmfc2_err, f)
+        with open(f'dump/{dataset}L1_distances_tk_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L1_distances_tk_err, f)
-        with open(f'dump/{dataset}L1_distances_tm_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}L1_distances_tm_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(L1_distances_tm_err, f)
 
-        with open(f'dump/{dataset}average_fs.pkl', 'wb') as f:
+        with open(f'dump/{dataset}average_fs_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(average_fs, f)
-        with open(f'dump/{dataset}average_mfs.pkl', 'wb') as f:
+        with open(f'dump/{dataset}average_mfs_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(average_mfs, f)
-        with open(f'dump/{dataset}average_mfsc.pkl', 'wb') as f:
+        with open(f'dump/{dataset}average_mfsc_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(average_mfsc, f)
-        with open(f'dump/{dataset}average_ts.pkl', 'wb') as f:
+        with open(f'dump/{dataset}average_mfsc2_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
+            pickle.dump(average_mfsc2, f)
+        with open(f'dump/{dataset}average_ts_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(average_ts, f)
-        with open(f'dump/{dataset}average_ks.pkl', 'wb') as f:
+        with open(f'dump/{dataset}average_ks_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(average_ks, f)
-        with open(f'dump/{dataset}average_ms.pkl', 'wb') as f:
+        with open(f'dump/{dataset}average_ms_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(average_ms, f)
 
-        with open(f'dump/{dataset}average_fs_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}average_fs_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(average_fs_err, f)
-        with open(f'dump/{dataset}average_mfs_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}average_mfs_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(average_mfs_err, f)
-        with open(f'dump/{dataset}average_mfsc_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}average_mfsc_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(average_mfsc_err, f)
-        with open(f'dump/{dataset}average_ts_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}average_mfsc2_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
+            pickle.dump(average_mfsc2_err, f)
+        with open(f'dump/{dataset}average_ts_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(average_ts_err, f)
-        with open(f'dump/{dataset}average_ks_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}average_ks_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(average_ks_err, f)
-        with open(f'dump/{dataset}average_ms_err.pkl', 'wb') as f:
+        with open(f'dump/{dataset}average_ms_err_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(average_ms_err, f)
 
-        with open(f'dump/{dataset}mean_error_rate_fs.pkl', 'wb') as f:
+        with open(f'dump/{dataset}mean_error_rate_fs_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(mean_error_rate_fs, f)
-        with open(f'dump/{dataset}mean_error_rate_mfs.pkl', 'wb') as f:
+        with open(f'dump/{dataset}mean_error_rate_mfs_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(mean_error_rate_mfs, f)
-        with open(f'dump/{dataset}mean_error_rate_mfsc.pkl', 'wb') as f:
+        with open(f'dump/{dataset}mean_error_rate_mfsc_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(mean_error_rate_mfsc, f)
-        with open(f'dump/{dataset}mean_error_rate_ts.pkl', 'wb') as f:
+        with open(f'dump/{dataset}mean_error_rate_mfsc2_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
+            pickle.dump(mean_error_rate_mfsc2, f)
+        with open(f'dump/{dataset}mean_error_rate_ts_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(mean_error_rate_ts, f)
-        with open(f'dump/{dataset}mean_error_rate_ks.pkl', 'wb') as f:
+        with open(f'dump/{dataset}mean_error_rate_ks_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(mean_error_rate_ks, f)
-        with open(f'dump/{dataset}mean_error_rate_ms.pkl', 'wb') as f:
+        with open(f'dump/{dataset}mean_error_rate_ms_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(mean_error_rate_ms, f)
 
-        with open(f'dump/{dataset}list_time_fs.pkl', 'wb') as f:
+        with open(f'dump/{dataset}list_time_fs_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(list_time_fs, f)
-        with open(f'dump/{dataset}list_time_mfs.pkl', 'wb') as f:
+        with open(f'dump/{dataset}list_time_mfs_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(list_time_mfs, f)
-        with open(f'dump/{dataset}list_time_mfsc.pkl', 'wb') as f:
+        with open(f'dump/{dataset}list_time_mfsc_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(list_time_mfsc, f)
-        with open(f'dump/{dataset}list_time_tk.pkl', 'wb') as f:
+        with open(f'dump/{dataset}list_time_mfsc2_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
+            pickle.dump(list_time_mfsc2, f)
+        with open(f'dump/{dataset}list_time_tk_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(list_time_tk, f)
-        with open(f'dump/{dataset}list_time_ms.pkl', 'wb') as f:
+        with open(f'dump/{dataset}list_time_ms_alpha={alpha}_seed={seed}.pkl', 'wb') as f:
             pickle.dump(list_time_ms, f)
 
-    return average_fs, average_mfs, average_mfsc, average_ts, average_ks, average_ms, \
-              average_fs_err, average_mfs_err, average_mfsc_err, average_ts_err, average_ks_err, average_ms_err, \
-                mean_error_rate_fs, mean_error_rate_mfs, mean_error_rate_mfsc, mean_error_rate_ts, mean_error_rate_ks, mean_error_rate_ms, \
-                    list_time_fs, list_time_mfs, list_time_mfsc, list_time_tk, list_time_ms, \
-                        L1_distances_tf, L1_distances_tmf, L1_distances_tmfc, L1_distances_tk, L1_distances_tm, \
-                            L1_distances_tf_err, L1_distances_tmf_err, L1_distances_tmfc_err, L1_distances_tk_err, L1_distances_tm_err, \
+    return average_fs, average_mfs, average_mfsc, average_mfsc2, average_ts, average_ks, average_ms, \
+              average_fs_err, average_mfs_err, average_mfsc_err, average_mfsc2_err, average_ts_err, average_ks_err, average_ms_err, \
+                mean_error_rate_fs, mean_error_rate_mfs, mean_error_rate_mfsc, mean_error_rate_mfsc2, mean_error_rate_ts, mean_error_rate_ks, mean_error_rate_ms, \
+                    list_time_fs, list_time_mfs, list_time_mfsc, list_time_mfsc2, list_time_tk, list_time_ms, \
+                        L1_distances_tf, L1_distances_tmf, L1_distances_tmfc, L1_distances_tmfc2, L1_distances_tk, L1_distances_tm, \
+                            L1_distances_tf_err, L1_distances_tmf_err, L1_distances_tmfc_err, L1_distances_tmfc2_err, L1_distances_tk_err, L1_distances_tm_err, \
                                 L2_distances_tm, L2_distances_tm_err, L2_distances_tmf, L2_distances_tmf_err, L2_distances_tf, L2_distances_tf_err, \
-                                    L2_distances_tmfc, L2_distances_tmfc_err, L2_distances_tk, L2_distances_tk_err
+                                    L2_distances_tmfc, L2_distances_tmfc2, L2_distances_tmfc_err, L2_distances_tmfc2_err, L2_distances_tk, L2_distances_tk_err
+
 

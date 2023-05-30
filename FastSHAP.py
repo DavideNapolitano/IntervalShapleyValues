@@ -81,7 +81,7 @@ def calculate_grand_coalition(dataset, imputer, batch_size, link, device, num_wo
 
 def generate_validation_data(val_set, imputer, validation_samples, sampler, batch_size, link, device, num_workers, VECTOR):
     # Generate coalitions.
-    print("")
+    # print("")
     val_S = sampler.sample(validation_samples * len(val_set), paired_sampling=True)\
                 .reshape(len(val_set), validation_samples, imputer.num_players) ####################################################
 

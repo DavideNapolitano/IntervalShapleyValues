@@ -77,7 +77,7 @@ def calculate_grand_coalition(dataset, imputer, batch_size, link, device, num_wo
 
 def generate_validation_data(val_set, imputer, validation_samples, sampler, batch_size, link, device, num_workers):
     # Generate coalitions.
-    print("")
+    # print("")
     val_S = sampler.sample(validation_samples * len(val_set), paired_sampling=True).reshape(len(val_set), validation_samples, imputer.num_players)
 
     # Get values.
@@ -145,7 +145,7 @@ def validate(val_loader, imputer, explainer, null1, null2, link, normalization, 
                 print("VALIDATION approx shape2", approx2.shape)
             loss1 = loss_fn(approx1, values1)
             loss2 = loss_fn(approx2, values2)
-            if constraint == 1:
+            if constraint == 1: #minimize interval width
                 vec1 = pred1[:, 0].unsqueeze(1)  # neg
                 vec2 = pred2[:, 0].unsqueeze(1)  # pos
                 vec3 = torch.cat((vec1, vec2), 1)
@@ -162,13 +162,13 @@ def validate(val_loader, imputer, explainer, null1, null2, link, normalization, 
                 # vec5 = values1[:, 1] - values2[:, 0]
                 # vec6 = torch.cat((vec5.unsqueeze(1), vec4.unsqueeze(1)), 1)
 
-                if debug and epoch == 0 and iter < 5:
+                if debug_val and epoch == 0 and iter < 5:
                     print("VEC3", vec3.shape, vec3)
                     print("VEC6", vec6.shape, vec6)
 
                 loss3 = loss_fn(vec3, vec6)
 
-                loss = num_players * ((1 - alpha) * (loss1 + loss2) + (alpha) * (loss3))
+                loss = ((1 - alpha) * (loss1 + loss2) + (alpha) * (loss3))
             elif constraint == 2:
                 temp1 = torch.matmul(S, pred1)
                 temp2 = torch.matmul(S, pred2)
@@ -185,7 +185,7 @@ def validate(val_loader, imputer, explainer, null1, null2, link, normalization, 
                 vec6 = torch.cat((vec4.unsqueeze(1), vec5.unsqueeze(1)), 1)
 
                 loss3 = loss_fn(vec3, vec6)
-                loss = num_players * ((1 - alpha) * (loss1 + loss2) + (alpha) * (loss3))
+                loss = ((1 - alpha) * (loss1 + loss2) + (alpha) * (loss3))
             else:
                 loss = loss1 + loss2
 
