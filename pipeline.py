@@ -23,7 +23,7 @@ from Metrics import compute_metrics
 from scipy.stats import t as t_statistic
 
 #%% DATASET
-X_train_s, X_val_s, X_test_s, Y_train, Y_val, Y_test, feature_names, num_features, dataset = Datasets.Monks()
+X_train_s, X_val_s, X_test_s, Y_train, Y_val, Y_test, feature_names, num_features, dataset = Datasets.Heart()
 
 #%% ORIGINAL MODEL
 modelRF = RandomForestClassifier(random_state=0)
@@ -98,7 +98,7 @@ def Confidence_Interval(x, debug=False, confidence_level=0.95):
     return avg, ci
 
 #%% LOOP SEEDS
-for alpha in [0.002, 0.003, 0.004,  0.005]:
+for alpha in [0.001, 0.002, 0.003, 0.004,  0.005]:
     print('-'*100)
     print(f'alpha={alpha}')
 
