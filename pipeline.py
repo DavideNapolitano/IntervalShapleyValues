@@ -98,7 +98,7 @@ def Confidence_Interval(x, debug=False, confidence_level=0.95):
     return avg, ci
 
 #%% LOOP SEEDS
-for alpha in [0.001]:#, 0.002, 0.003, 0.004,  0.005]:
+for alpha in [0.002, 0.003, 0.004,  0.005]:
     print('-'*100)
     print(f'alpha={alpha}')
 
@@ -247,7 +247,7 @@ for alpha in [0.001]:#, 0.002, 0.003, 0.004,  0.005]:
             lr_factor=0.5,
             weight_decay=0.05,
             training_seed=seed,
-            lookback=20,
+             lookback=20,
             debug=False)
 
         # TRAINING FASTSHAP3
